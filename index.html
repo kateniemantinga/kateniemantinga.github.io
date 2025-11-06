@@ -1,1 +1,689 @@
 
+
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+
+// --- FIREBASE IMPORTS AND SETUP (Required for Real-World Apps) ---
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+
+// Global variables provided by the environment
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+// --- STATIC COLOR DATA ---
+// NOTE: Duplicate hex codes were removed or handled by using a composite key in the list rendering.
+const COLOR_DATA = [
+    { category: 'Premium', name: 'Copper Tan', hex: '#DF8965' },
+    { category: 'Premium', name: 'Pacific', hex: '#75B7D8' },
+    { category: 'Premium', name: 'Leprchaun Green', hex: '#3A5548' },
+    { category: 'Premium', name: 'Florence', hex: '#94B277' },
+    { category: 'Premium', name: 'Solar Flare', hex: '#E57B3F' },
+    { category: 'Premium', name: 'Pesto', hex: '#B83136' },
+    { category: 'Premium', name: 'Royal Lines', hex: '#6C3C5C' },
+    { category: 'Premium', name: 'I pink I can', hex: '#D37E8D' },
+    { category: 'Premium', name: 'Desirable', hex: '#AA3934' },
+    { category: 'Premium', name: 'Circus Red', hex: '#94484A' },
+    { category: 'Premium', name: 'Sunstone', hex: '#C68980' },
+    { category: 'Premium', name: 'Conifer', hex: '#895657' },
+    { category: 'Premium', name: 'Terra Cotta', hex: '#9E6961' },
+    { category: 'Premium', name: 'Cozy Summer', hex: '#EB9D9D' },
+    { category: 'Premium', name: 'Tapestry Red', hex: '#C16561' },
+    { category: 'Premium', name: 'Kurunzome Brown', hex: '#9F7662' },
+    { category: 'Premium', name: 'Capri Isle', hex: '#545958' },
+    { category: 'Premium', name: 'Night Shift', hex: '#2B5D6C' },
+    { category: 'Nudes', name: 'Pumpernickel Brown', hex: '#6F442F' },
+    { category: 'Nudes', name: 'Pantone', hex: '#A06647' }, 
+    { category: 'Nudes', name: 'Shank', hex: '#A18A5D' },
+    { category: 'Nudes', name: 'Taffy', hex: '#C4956C' },
+    { category: 'Nudes', name: 'Kenya', hex: '#CCA47B' },
+    { category: 'Nudes', name: 'Whiskey', hex: '#D28F66' },
+    { category: 'Nudes', name: 'Caramelized', hex: '#BA9780' },
+    { category: 'Nudes', name: 'Brown Hare', hex: '#D3B493' },
+    { category: 'Nudes', name: 'Ghosting', hex: '#CAC5B9' },
+    { category: 'Nudes', name: 'Whitecap Grey', hex: '#E0D4C7' }, 
+    { category: 'Nudes', name: 'Bethlehem Superstar', hex: '#E8ECD5' },
+    { category: 'Nudes', name: 'Barking Prairie Dog', hex: '#C6B399' },
+    { category: 'Neutrals', name: 'Semi Sweet Chocolate', hex: '#663B25' },
+    { category: 'Neutrals', name: 'Bull shot', hex: '#74422A' },
+    { category: 'Neutrals', name: 'Wet Adobe', hex: '#A5613A' },
+    { category: 'Neutrals', name: 'Beauty Spot', hex: '#5F4C36' },
+    { category: 'Neutrals', name: 'Treasure Chamber', hex: '#978666' },
+    { category: 'Neutrals', name: 'Sensible', hex: '#EAD4B3' },
+    { category: 'Neutrals', name: 'Verdun Green', hex: '#4E561D' },
+    { category: 'Neutrals', name: 'Cold sea currents', hex: '#32535E' },
+    { category: 'Neutrals', name: 'Ripe', hex: '#863A3A' },
+    { category: 'Neutrals', name: 'Langoustine', hex: '#D85225' },
+    { category: 'Neutrals', name: 'Le Comusier Crush', hex: '#BF4A49' },
+    { category: 'Neutrals', name: 'Bronzed Orange', hex: '#D68A6F' },
+    { category: 'Neutrals', name: 'Deep Taupe', hex: '#7D6662' },
+    { category: 'Neutrals', name: 'Cranberry Red', hex: '#81574E' },
+    { category: 'Neutrals', name: 'Coffee Beans', hex: '#6D514B' },
+    { category: 'Neutrals', name: 'Gobo Brown', hex: '#635148' },
+    { category: 'Neutrals', name: 'Flamboyant Plum', hex: '#664B4E' },
+    // Removed duplicate 'Capri Isle' entry here: #545958
+    { category: 'Basic', name: 'Leroy', hex: '#70645A' },
+    { category: 'Basic', name: 'Tankard Grey', hex: '#7D7464' },
+    { category: 'Basic', name: 'Lazy Afternoon', hex: '#97948C' },
+    { category: 'Basic', name: 'Chinchilla', hex: '#9C8C79' },
+    { category: 'Basic', name: 'Smoked Mauve', hex: '#A39A95' },
+    { category: 'Basic', name: 'Middle Yellow Red', hex: '#ECB275' },
+    { category: 'Basic', name: 'Cigar', hex: '#7B5237' },
+    { category: 'Basic', name: 'Chesnut Stalltion', hex: '#965F3A' },
+    { category: 'Basic', name: 'Back to School', hex: '#C0823B' },
+    { category: 'Basic', name: 'Shiracha Brown', hex: '#C5906A' },
+    { category: 'Basic', name: 'Pumpkin Bread', hex: '#D2804B' },
+    { category: 'Basic', name: 'Elden Ring', hex: '#EA8D0C' }, 
+    { category: 'Basic', name: 'Arnica Yellow', hex: '#E29900' },
+    { category: 'Basic', name: 'Pumpkin Yellow', hex: '#E69314' },
+    { category: 'Basic', name: 'Brass Mesh', hex: '#E1A74A' },
+    { category: 'Basic', name: 'Sunny Disposition', hex: '#DDA235' },
+    { category: 'Basic', name: 'Butterscotch Bliss', hex: '#D7B068' },
+    { category: 'Basic', name: 'Spill the Beans', hex: '#964218' },
+    { category: 'Basic', name: 'Pindjur Red', hex: '#B44B14' },
+    { category: 'Basic', name: 'Tomato Bisque', hex: '#CF5414' },
+    { category: 'Basic', name: 'Dirty Orange', hex: '#CD6807' }, 
+    { category: 'Basic', name: 'Cold Pilsner', hex: '#D29352' },
+    { category: 'Basic', name: 'Mayan Treasure', hex: '#CF9A47' },
+    { category: 'Basic', name: 'Hereford Cow Brown', hex: '#6A2A1D' },
+    { category: 'Basic', name: 'Mahogany', hex: '#C23C04' },
+    { category: 'Basic', name: 'Dried Saffron', hex: '#BE4628' },
+    { category: 'Basic', name: 'Flaming Torch', hex: '#D1874E' },
+    { category: 'Basic', name: 'Guardsman Red', hex: '#902D30' },
+    { category: 'Basic', name: 'Safflower Red', hex: '#DA333A' },
+    { category: 'Basic', name: 'Dull Red', hex: '#BC3F3F' },
+    { category: 'Basic', name: 'Deep Sea Coral', hex: '#DA5B5A' },
+    { category: 'Basic', name: 'Ok Corral', hex: '#D16E5B' },
+    { category: 'Basic', name: 'Zanci', hex: '#D28B79' },
+    { category: 'Basic', name: 'Precision', hex: '#28363E' },
+    { category: 'Basic', name: 'Green Vogue', hex: '#24464F' },
+    { category: 'Basic', name: 'Recollection Blue', hex: '#1C5562' },
+    { category: 'Basic', name: 'Faded Jade', hex: '#43797B' },
+    { category: 'Basic', name: 'Smalt Blue', hex: '#475E63' },
+    { category: 'Basic', name: 'Eucalyptus Wreath', hex: '#87907B' },
+    { category: 'Basic', name: 'Red Mahogany', hex: '#5F353E' },
+    { category: 'Basic', name: 'Purplish Brown', hex: '#6A3F47' },
+    { category: 'Basic', name: 'Ancho Pepper', hex: '#795145' },
+    { category: 'Basic', name: 'Autumn Hills', hex: '#7B5153' },
+    { category: 'Basic', name: 'Vivacious', hex: '#972554' },
+    { category: 'Basic', name: 'Toasted Nutmeg', hex: '#A27165' },
+    { category: 'Basic', name: 'Umber Shade Wash', hex: '#4D4D2C' },
+    { category: 'Basic', name: 'Khaki Green', hex: '#72893B' },
+    { category: 'Basic', name: 'Ranger Station', hex: '#6E7452' },
+    { category: 'Basic', name: 'Broad Bean', hex: '#929759' },
+    { category: 'Basic', name: 'Organic Matter', hex: '#A39E50' },
+    { category: 'Basic', name: 'Heathered Grey', hex: '#B4AF92' },
+    { category: 'Basic', name: 'Ancient Earth', hex: '#746450' },
+    { category: 'Basic', name: 'Himalaya', hex: '#706731' },
+    { category: 'Basic', name: 'Relentless Olive', hex: '#6D6F3C' },
+    { category: 'Basic', name: 'Peppered Moss', hex: '#7F7948' },
+    { category: 'Basic', name: 'Tangy Dill', hex: '#9D9047' },
+    { category: 'Basic', name: 'Loveliest Leaves', hex: '#A29C5B' },
+    { category: 'Universals', name: 'Honourable Blue', hex: '#183E76' },
+    { category: 'Universals', name: 'Altdorf Guard Blue', hex: '#1C58B1' },
+    { category: 'Universals', name: 'Blue Oblivion', hex: '#283F91' },
+    { category: 'Universals', name: 'Wet Latex', hex: '#000E44' },
+    { category: 'Universals', name: 'Power Outage', hex: '#3A2046' },
+    { category: 'Universals', name: 'Acai Juice', hex: '#8B1B8A' },
+    { category: 'Universals', name: 'Exuburant Pink', hex: '#B74B7D' },
+    { category: 'Universals', name: 'Timeless Beauty', hex: '#B4283E' },
+    { category: 'Universals', name: 'Fireside', hex: '#6F4944' },
+    { category: 'Universals', name: 'Fuel Town', hex: '#566070' },
+    { category: 'Universals', name: 'Storm Green', hex: '#103532' },
+    { category: 'Universals', name: 'Deep Teal', hex: '#005959' },
+    { category: 'Universals', name: 'Gibraltar Sea', hex: '#12424E' },
+    { category: 'Universals', name: 'Pantone', hex: '#00BAAE' },
+    { category: 'Universals', name: 'Lunaria', hex: '#F7E7CE' },
+    { category: 'Nail Polish', name: 'Tan', hex: '#AF866D' },
+    { category: 'Nail Polish', name: 'Red', hex: '#721A0C' },
+    { category: 'Nail Polish', name: 'Burgundy', hex: '#621C18' },
+    { category: 'Nail Polish', name: 'Purple', hex: '#3E1828' },
+    { category: 'Nail Polish', name: 'Taupe', hex: '#7C5842' },
+    { category: 'Nail Polish', name: 'Brown', hex: '#6F412C' },
+    { category: 'Nail Polish', name: 'Orangish', hex: '#B65744' },
+    { category: 'Nail Polish', name: 'Dark Brown', hex: '#351C14' },
+    { category: 'Nail Polish', name: 'Coral', hex: '#EB6D5D' },
+    { category: 'Nail Polish', name: 'Pink', hex: '#C2676B' },
+    { category: 'Nail Polish', name: 'Light Pink', hex: '#EFA29E' },
+    { category: 'Nail Polish', name: 'Dusky Pink', hex: '#C16561' }, // Shares hex with Tapestry Red, now using composite key
+];
+
+// --- CIELAB Conversion Utilities (Moved outside App for performance) ---
+
+// CIELAB constants (D65 white point)
+const Xn = 95.047;
+const Yn = 100.000;
+const Zn = 108.883;
+const T_THRESHOLD = Math.pow(6/29, 3);
+const T_SCALE = 1/3 * Math.pow(29/6, 2);
+
+const F = (t) => t > T_THRESHOLD ? Math.pow(t, 1/3) : (T_SCALE * t + 4/29);
+const linearRgb = (c) => {
+    c = c / 255;
+    return (c <= 0.04045) ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+};
+
+const rgbToXyz = (r255, g255, b255) => {
+    const R = linearRgb(r255);
+    const G = linearRgb(g255);
+    const B = linearRgb(b255);
+    const X = R * 0.4124564 + G * 0.3575761 + B * 0.1804375;
+    const Y = R * 0.2126729 + G * 0.7151522 + B * 0.0721750;
+    const Z = R * 0.0193339 + G * 0.1191920 + B * 0.9504559;
+    return { X: X * 100, Y: Y * 100, Z: Z * 100 };
+};
+
+const xyzToLab = (X, Y, Z) => {
+    const Xr = X / Xn;
+    const Yr = Y / Yn;
+    const Zr = Z / Zn;
+    const fXr = F(Xr);
+    const fYr = F(Yr);
+    const fZr = F(Zr);
+    const L = (116 * fYr) - 16;
+    const a = 500 * (fXr - fYr);
+    const b = 200 * (fYr - fZr);
+    return { L: L, a: a, b: b };
+};
+
+const hexToRgb = (hex) => {
+    const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+    hex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : null;
+};
+
+const rgbToHex = (r, g, b) => {
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+};
+
+const hexToLab = (hex) => {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return null;
+    const xyz = rgbToXyz(rgb.r, rgb.g, rgb.b);
+    return xyzToLab(xyz.X, xyz.Y, xyz.Z);
+};
+
+// Function to calculate text color based on background luminosity
+const getTextColor = (hex) => {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return 'text-gray-800';
+    const { r, g, b } = rgb;
+    const luminosity = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    return luminosity < 0.5 ? 'text-white' : 'text-gray-800';
+};
+
+// --- QUALITATIVE COLOR ANALYSIS LOGIC ---
+
+const getQualitativeCharacteristics = (lab) => {
+    if (!lab) return { temperature: 'N/A', intensity: 'N/A', L: '--', a: '--', b: '--' };
+    const { L, a, b } = lab;
+    const C = Math.sqrt(a * a + b * b);
+
+    // 1. Temperature (Warm/Cool/Neutral) - Based on b* (Yellow/Blue axis)
+    let temperature;
+    if (b > 10) {
+        temperature = 'Warm';
+    } else if (b < -10) {
+        temperature = 'Cool';
+    } else {
+        temperature = 'Neutral';
+    }
+
+    // 2. Intensity/Depth (Vibrant/Muted/Soft/Deep) - Based on L* and C*
+    let intensity;
+    
+    if (L < 25) {
+        intensity = 'Deep';
+    } else if (L > 85 && C < 15) {
+        intensity = 'Soft';
+    } else if (C > 50) {
+        intensity = 'Vibrant';
+    } else if (C < 20) {
+        intensity = 'Muted';
+    } else {
+        intensity = 'Soft';
+    }
+
+    return { 
+        temperature, 
+        intensity, 
+        L: L.toFixed(2), 
+        a: a.toFixed(2), 
+        b: b.toFixed(2) 
+    };
+};
+
+const findClosestColor = (pickedHex) => {
+    const pickedLab = hexToLab(pickedHex);
+    if (!pickedLab) return null;
+    
+    const pickedQualities = getQualitativeCharacteristics(pickedLab);
+
+    let closestColor = null;
+    let minDistanceSq = Infinity;
+
+    for (const predefinedColor of COLOR_DATA) {
+        const predefinedLab = hexToLab(predefinedColor.hex);
+        
+        // Euclidean distance in LAB space (Delta E approximation)
+        const dL = pickedLab.L - predefinedLab.L;
+        const da = pickedLab.a - predefinedLab.a;
+        const db = pickedLab.b - predefinedLab.b;
+        const distanceSq = dL * dL + da * da + db * db;
+
+        if (distanceSq < minDistanceSq) {
+            minDistanceSq = distanceSq;
+            const predefinedQualities = getQualitativeCharacteristics(predefinedLab);
+            closestColor = { ...predefinedColor, lab: predefinedLab, qualities: predefinedQualities };
+        }
+    }
+    
+    return { pickedQualities, closestMatch: closestColor };
+};
+
+// --- REACT COMPONENTS AND MAIN LOGIC ---
+
+// Helper Component for Swatches in the grid
+const ColorSwatch = React.memo(({ color, copyToClipboard }) => {
+    const textColorClass = getTextColor(color.hex);
+    
+    return (
+        <div 
+            className="swatch rounded-xl p-3 sm:p-4 flex flex-col justify-between shadow-md h-24 sm:h-32 transition-transform duration-100 cursor-pointer hover:scale-[1.03]"
+            style={{ backgroundColor: color.hex }}
+            onClick={() => copyToClipboard(color.hex)}
+        >
+            <div className={`${textColorClass} font-semibold text-sm sm:text-lg leading-tight truncate`}>{color.name}</div>
+            <div className={`${textColorClass} font-mono text-xs sm:text-sm opacity-80 mt-1`}>{color.hex}</div>
+        </div>
+    );
+});
+
+// Helper Component for Qualitative Tags
+const QualitativeTags = ({ qualities }) => {
+    if (qualities.temperature === 'N/A') return null;
+
+    const tags = [
+        { 
+            text: qualities.temperature, 
+            color: qualities.temperature === 'Warm' ? 'bg-orange-100 text-orange-700' : (qualities.temperature === 'Cool' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700') 
+        },
+        { 
+            text: qualities.intensity, 
+            color: qualities.intensity === 'Vibrant' ? 'bg-red-100 text-red-700' : (qualities.intensity === 'Deep' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700') 
+        }
+    ];
+
+    return (
+        <div className="mt-2 flex flex-wrap gap-2">
+            {tags.map((tag, index) => (
+                <span key={index} className={`px-3 py-1 text-xs font-semibold rounded-full ${tag.color}`}>
+                    {tag.text}
+                </span>
+            ))}
+        </div>
+    );
+};
+
+
+const App = () => {
+    // --- STATE MANAGEMENT ---
+    const [isAuthReady, setIsAuthReady] = useState(false);
+    const [db, setDb] = useState(null);
+    const [auth, setAuth] = useState(null);
+    const [userId, setUserId] = useState(null);
+    
+    const [currentImage, setCurrentImage] = useState(null);
+    const [pickedColorHex, setPickedColorHex] = useState('#------');
+    const [pickedQualities, setPickedQualities] = useState(getQualitativeCharacteristics(null));
+    const [closestMatch, setClosestMatch] = useState(null);
+    
+    const [currentCategory, setCurrentCategory] = useState('All');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [toastMessage, setToastMessage] = useState(null);
+
+    // --- REFS ---
+    const canvasRef = useRef(null);
+    const imageRef = useRef(null);
+    const fileInputRef = useRef(null);
+
+    // --- FIREBASE INITIALIZATION ---
+    useEffect(() => {
+        try {
+            const app = initializeApp(firebaseConfig);
+            const firestoreDb = getFirestore(app);
+            const firebaseAuth = getAuth(app);
+            
+            setDb(firestoreDb);
+            setAuth(firebaseAuth);
+
+            onAuthStateChanged(firebaseAuth, async (user) => {
+                if (user) {
+                    setUserId(user.uid);
+                    setIsAuthReady(true);
+                } else if (initialAuthToken) {
+                    // Sign in with custom token if available
+                    try {
+                        await signInWithCustomToken(firebaseAuth, initialAuthToken);
+                    } catch (error) {
+                        console.error("Custom token sign-in failed:", error);
+                        await signInAnonymously(firebaseAuth);
+                    }
+                } else {
+                    // Sign in anonymously as a fallback
+                    await signInAnonymously(firebaseAuth);
+                }
+                setIsAuthReady(true);
+            });
+
+        } catch (error) {
+            console.error("Firebase initialization failed:", error);
+            setIsAuthReady(true); // Allow app to run even without full Firebase connection
+        }
+    }, []);
+
+    // --- IMAGE & CANVAS LOGIC ---
+
+    // Draws the image on the canvas whenever currentImage state changes
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        const image = imageRef.current;
+
+        if (canvas && image && currentImage) {
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            
+            // Set canvas dimensions to the image's natural size for correct pixel reading
+            canvas.width = image.naturalWidth;
+            canvas.height = image.naturalHeight;
+            
+            // Draw the image
+            ctx.drawImage(image, 0, 0);
+        }
+    }, [currentImage]);
+
+    // Handle image file selection
+    const handleImageUpload = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            setCurrentImage(e.target.result);
+            // Reset match display
+            setPickedColorHex('#------');
+            setPickedQualities(getQualitativeCharacteristics(null));
+            setClosestMatch(null);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // Main color picking logic (handles mouse and touch)
+    const handleColorPick = useCallback((event) => {
+        const canvas = canvasRef.current;
+        if (!currentImage || !canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const rect = canvas.getBoundingClientRect();
+
+        // Determine click/touch position
+        const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+        const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+        // Calculate click coordinates relative to the canvas display size
+        const xClick = clientX - rect.left;
+        const yClick = clientY - rect.top;
+
+        // Calculate scaling factor between display size and internal pixel size
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        // Get pixel data from the original (non-scaled) image coordinates
+        const imageData = ctx.getImageData(xClick * scaleX, yClick * scaleY, 1, 1);
+        const [r, g, b] = imageData.data;
+        
+        const pickedHex = rgbToHex(r, g, b);
+        
+        // Find and display best match
+        const result = findClosestColor(pickedHex);
+        
+        if (result) {
+            setPickedColorHex(pickedHex);
+            setPickedQualities(result.pickedQualities);
+            setClosestMatch(result.closestMatch);
+        }
+    }, [currentImage]);
+
+    // --- UTILITY HANDLERS ---
+    
+    // Copy hex to clipboard and show toast
+    const copyToClipboard = useCallback((text) => {
+        const tempInput = document.createElement('textarea');
+        tempInput.value = text;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+
+        setToastMessage(`Copied: ${text}`);
+        setTimeout(() => setToastMessage(null), 1500);
+    }, []);
+    
+    // --- FILTERING LOGIC ---
+
+    const categories = useMemo(() => ['All', ...new Set(COLOR_DATA.map(c => c.category))], []);
+    
+    // Filtered list of colors for the grid
+    const filteredColors = useMemo(() => {
+        let colors = COLOR_DATA;
+
+        if (currentCategory !== 'All') {
+            colors = colors.filter(color => color.category === currentCategory);
+        }
+
+        if (searchTerm) {
+            const lowerSearch = searchTerm.toLowerCase();
+            colors = colors.filter(color => 
+                color.name.toLowerCase().includes(lowerSearch) || 
+                color.hex.toLowerCase().includes(lowerSearch)
+            );
+        }
+
+        return colors;
+    }, [currentCategory, searchTerm]);
+
+
+    // --- RENDERING ---
+
+    return (
+        <div className="min-h-screen bg-gray-50 flex flex-col items-center p-0 font-['Inter']">
+            
+            {/* Notification Toast */}
+            {toastMessage && (
+                <div 
+                    className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#3A5548] text-white px-4 py-3 rounded-xl shadow-2xl transition-all duration-300"
+                    role="alert"
+                >
+                    {toastMessage}
+                </div>
+            )}
+
+            {/* Header - Mobile friendly tall section */}
+            <header className="w-full bg-[#3A5548] text-white py-6 px-4 shadow-lg rounded-b-3xl">
+                <h1 className="text-2xl font-extrabold tracking-tight">Pocket Stylist</h1>
+                <p className="text-sm opacity-80 mt-1">Color Match & Palette Explorer</p>
+                {/* Displaying user ID for multi-user context */}
+                {isAuthReady && <p className="text-xs mt-2 opacity-60">User ID: {userId}</p>}
+            </header>
+
+            <main className="w-full max-w-4xl p-4 sm:p-6 pb-20">
+                
+                {/* --- Color Matching Tool --- */}
+                <section className="bg-white rounded-xl shadow-lg p-4 mb-6">
+                    <h2 className="text-xl font-bold mb-4 text-[#DF8965] border-b pb-2">Image Color Picker</h2>
+                    
+                    <input 
+                        type="file" 
+                        id="image-upload" 
+                        accept="image/*" 
+                        onChange={handleImageUpload}
+                        ref={fileInputRef}
+                        className="hidden"
+                    />
+                    
+                    <button 
+                        onClick={() => fileInputRef.current.click()}
+                        className="w-full p-3 mb-4 bg-[#75B7D8] text-white font-semibold rounded-lg shadow-md hover:bg-[#6CAAD1] transition duration-200"
+                    >
+                        {currentImage ? 'Change Image' : 'Upload Image to Pick Color'}
+                    </button>
+
+                    {/* Canvas Area (Responsive Container) */}
+                    <div className="relative w-full border-2 border-dashed border-gray-300 rounded-lg min-h-[150px] flex items-center justify-center bg-gray-100 overflow-hidden">
+                        
+                        {!currentImage && (
+                            <p className="text-gray-500 text-sm p-4 text-center">
+                                Upload an image above, then **tap** the image to pick a color.
+                            </p>
+                        )}
+
+                        <div className="w-full max-h-[400px] overflow-hidden">
+                            {/* The actual image element is used to load and reference the image dimensions */}
+                            {currentImage && (
+                                <img 
+                                    ref={imageRef} 
+                                    src={currentImage} 
+                                    alt="Color source" 
+                                    className="max-w-full h-auto hidden" 
+                                    onLoad={() => {
+                                        // Trigger a re-render/effect when the image is fully loaded to draw on canvas
+                                        const canvas = canvasRef.current;
+                                        if (canvas) {
+                                            const ctx = canvas.getContext('2d');
+                                            canvas.width = imageRef.current.naturalWidth;
+                                            canvas.height = imageRef.current.naturalHeight;
+                                            ctx.drawImage(imageRef.current, 0, 0);
+                                        }
+                                    }}
+                                />
+                            )}
+                            {/* Canvas for rendering and interaction */}
+                            <canvas 
+                                ref={canvasRef} 
+                                onClick={handleColorPick}
+                                onTouchStart={handleColorPick}
+                                className={`w-full h-auto cursor-crosshair ${currentImage ? 'block' : 'hidden'}`}
+                                style={{ maxHeight: '400px', width: '100%', objectFit: 'contain' }}
+                            ></canvas>
+                        </div>
+                    </div>
+                </section>
+
+                {/* --- Results Area --- */}
+                <section className="bg-white rounded-xl shadow-lg p-4 mb-6">
+                    <h3 className="text-xl font-bold mb-4 text-[#3A5548] border-b pb-2">Results</h3>
+                    
+                    {/* Picked Color Display */}
+                    <div className="mb-4 pb-4 border-b border-gray-200">
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-2">Picked Color</p>
+                        <div className="flex items-start space-x-3">
+                            <div 
+                                className="w-12 h-12 rounded-xl shadow-inner border border-gray-300 transition duration-300"
+                                style={{ backgroundColor: pickedColorHex }}
+                            ></div>
+                            <div>
+                                <span className="font-mono font-bold text-lg text-gray-800">{pickedColorHex}</span>
+                                <QualitativeTags qualities={pickedQualities} />
+                                <p className="text-xs text-gray-400 font-medium mt-1">
+                                    L*: {pickedQualities.L}, a*: {pickedQualities.a}, b*: {pickedQualities.b}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Closest Match Display */}
+                    {closestMatch ? (
+                        <div className="pt-2">
+                            <p className="text-xs font-medium text-[#DF8965] uppercase tracking-wider mb-2">Closest Palette Match</p>
+                            <div className="flex items-start space-x-4">
+                                <div 
+                                    className="w-14 h-14 rounded-xl shadow-lg border-2 border-white ring-4 ring-[#DF8965]/50 cursor-pointer flex-shrink-0 transition duration-150 active:ring-[#3A5548]"
+                                    style={{ backgroundColor: closestMatch.hex }}
+                                    onClick={() => copyToClipboard(closestMatch.hex)}
+                                ></div>
+                                <div>
+                                    <p className="text-lg font-extrabold text-[#3A5548] leading-tight">{closestMatch.name}</p>
+                                    <p className="font-mono text-sm text-gray-600">{closestMatch.hex}</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">Category: {closestMatch.category}</p>
+                                    <QualitativeTags qualities={closestMatch.qualities} />
+                                    <p className="text-xs text-gray-400 font-medium mt-1">
+                                        L*: {closestMatch.qualities.L}, a*: {closestMatch.qualities.a}, b*: {closestMatch.qualities.b}
+                                    </p>
+                                </div>
+                            </div>
+                            <p className="text-xs text-gray-400 mt-4 italic text-center">Tap the large swatch to copy the palette color's hex.</p>
+                        </div>
+                    ) : (
+                        <div className="text-gray-400 text-center py-4">Tap the image to find your best match!</div>
+                    )}
+                </section>
+
+
+                {/* --- Palette Explorer Controls --- */}
+                <section className="bg-white rounded-xl shadow-lg p-4">
+                    <h2 className="text-xl font-bold mb-4 text-[#75B7D8] border-b pb-2">Palette Explorer</h2>
+                    
+                    {/* Search Bar */}
+                    <input 
+                        type="text" 
+                        placeholder="Search by name or hex code..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-4 focus:ring-[#DF8965]/50 focus:border-[#DF8965] transition duration-200 mb-4"
+                    />
+                    
+                    {/* Category Tabs (Horizontal Scroll on Mobile) */}
+                    <div className="flex overflow-x-auto pb-3 -mx-4 px-4 sm:mx-0 sm:px-0">
+                        <div className="flex space-x-2">
+                            {categories.map(category => (
+                                <button
+                                    key={category}
+                                    onClick={() => setCurrentCategory(category)}
+                                    className={`flex-shrink-0 px-4 py-2 rounded-full font-semibold text-sm transition duration-200 
+                                        ${currentCategory === category 
+                                            ? 'bg-[#DF8965] text-white shadow-md' 
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`
+                                    }
+                                >
+                                    {category}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* Color Grid */}
+                    <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 mt-4 max-h-[50vh] overflow-y-auto color-grid">
+                        {filteredColors.length > 0 ? (
+                            filteredColors.map(color => (
+                                <ColorSwatch 
+                                    // FIX: Using a composite key to ensure uniqueness when multiple colors share the same hex code
+                                    key={`${color.category}-${color.hex}`} 
+                                    color={color} 
+                                    copyToClipboard={copyToClipboard} 
+                                />
+                            ))
+                        ) : (
+                            <div className="col-span-full text-center text-gray-500 p-8">
+                                No colors found matching the current filters.
+                            </div>
+                        )}
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    );
+};
+
+export default App;
